@@ -17,7 +17,7 @@ if fl is not None:
     st.write(filename)
     df = pd.read_csv(filename, encoding = "ISO-8859-1")
 else:
-    os.chdir(r"C:\Users\LENOVO\OneDrive\Desktop\Internship_Docs\Dashboard_Doc\static codes")
+    #os.chdir(r"C:\Users\LENOVO\OneDrive\Desktop\Internship_Docs\Dashboard_Doc\static codes")
     df = pd.read_csv("Output_Data.csv")
 
 col1, col2 = st.columns((2))
