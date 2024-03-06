@@ -1,118 +1,130 @@
+# @Email:  contact@pythonandvba.com
+# @Website:  https://pythonandvba.com
+# @YouTube:  https://youtube.com/c/CodingIsFun
+# @Project:  Sales Dashboard w/ Streamlit
 
 
-import streamlit as st
-import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
-import plotly.express as px
-import time
 
-# Load the data
-df = pd.read_excel("streamlit.xlsx")
+import pandas as pd  # pip install pandas openpyxl
+import plotly.express as px  # pip install plotly-express
+import streamlit as st  # pip install streamlit
 
-# Set page configuration
-st.set_page_config(page_title="Sales Dashboard", page_icon="📊", layout="wide")
+# emojis: https://www.webfx.com/tools/emoji-cheat-sheet/
+st.set_page_config(page_title="Sales Dashboard", page_icon=":bar_chart:", layout="wide")
 
-# Streamlit App
-st.title("Sales Dashboard")
+# ---- READ EXCEL ----
+@st.cache_data
+def get_data_from_excel():
+    df = pd.read_excel(
+        io="supermarkt_sales.xlsx",
+        engine="openpyxl",
+        sheet_name="Sales",
+        skiprows=3,
+        usecols="B:R",
+        nrows=1000,
+    )
+    # Add 'hour' column to dataframe
+    df["hour"] = pd.to_datetime(df["Time"], format="%H:%M:%S").dt.hour
+    return df
 
-# Function to simulate buffering
-def simulate_buffering():
-    st.write("Hold tight, we're conjuring up some magic ✨")
-    for _ in range(10):
-        time.sleep(0.5)
-        st.write("🔮")
+df = get_data_from_excel()
 
-# Sidebar - Filters
-st.sidebar.title("Filters")
-selected_salesman = st.sidebar.selectbox("Salesman", [None] + list(df['Salesman'].unique()))
-selected_product = st.sidebar.selectbox("Product", [None] + list(df['Product'].unique()))
-selected_region = st.sidebar.selectbox("Region", [None] + list(df['Region'].unique()))
+# ---- SIDEBAR ----
+st.sidebar.header("Please Filter Here:")
+city = st.sidebar.multiselect(
+    "Select the City:",
+    options=df["City"].unique(),
+    default=df["City"].unique()
+)
 
-# Filtered Data based on Dropdown Selections
-filtered_df = df
-if selected_salesman is not None:
-    filtered_df = filtered_df[filtered_df['Salesman'] == selected_salesman]
-if selected_product is not None:
-    filtered_df = filtered_df[filtered_df['Product'] == selected_product]
-if selected_region is not None:
-    filtered_df = filtered_df[filtered_df['Region'] == selected_region]
+customer_type = st.sidebar.multiselect(
+    "Select the Customer Type:",
+    options=df["Customer_type"].unique(),
+    default=df["Customer_type"].unique(),
+)
 
-# Main Content - Dashboard Sections
+gender = st.sidebar.multiselect(
+    "Select the Gender:",
+    options=df["Gender"].unique(),
+    default=df["Gender"].unique()
+)
 
-# Summary Cards
-st.markdown("<h1 style='text-align: center;'>Summary Cards</h1>", unsafe_allow_html=True)
-col1, col2, col3 = st.columns(3)
-with col1:
-    st.metric("Total Sales", total_sales := filtered_df['Sales'].sum())
-with col2:
-    st.metric("Total Revenue", total_revenue := filtered_df['Revenue'].sum())
-with col3:
-    st.metric("Average Satisfaction", average_satisfaction := filtered_df['Client Satisfaction'].mean())
+df_selection = df.query(
+    "City == @city & Customer_type ==@customer_type & Gender == @gender"
+)
 
-# Total Sales by Salesman, Sales by Product, Revenue by Region
-st.markdown("<h1 style='text-align: center;'>Sales Overview</h1>", unsafe_allow_html=True)
-col1, col2, col3 = st.columns(3)
-with col1:
-    st.markdown("<h4>Total Sales by Salesman</h4>", unsafe_allow_html=True)
-    st.bar_chart(filtered_df.groupby('Salesman')['Sales'].sum().sort_values(ascending=False), color='#ffaa00')
+# Check if the dataframe is empty:
+if df_selection.empty:
+    st.warning("No data available based on the current filter settings!")
+    st.stop() # This will halt the app from further execution.
 
-with col2:
-    st.markdown("<h4>Sales by Product</h4>", unsafe_allow_html=True)
-    st.bar_chart(filtered_df.groupby('Product')['Sales'].sum().sort_values(ascending=False), color='#F08080')
+# ---- MAINPAGE ----
+st.title(":bar_chart: Sales Dashboard")
+st.markdown("##")
 
-with col3:
-    st.markdown("<h4>Revenue by Region</h4>", unsafe_allow_html=True)
-    st.bar_chart(filtered_df.groupby('Region')['Revenue'].sum().sort_values(ascending=False), color='#90EE90')
+# TOP KPI's
+total_sales = int(df_selection["Total"].sum())
+average_rating = round(df_selection["Rating"].mean(), 1)
+star_rating = ":star:" * int(round(average_rating, 0))
+average_sale_by_transaction = round(df_selection["Total"].mean(), 2)
 
-# Client Satisfaction Over Time, Client Satisfaction Distribution, Positive vs Negative Feedback
-st.markdown("<h1 style='text-align: center;'>Client Satisfaction and Feedback</h1>", unsafe_allow_html=True)
-col1, col2, col3 = st.columns(3)
-with col1:
-    st.markdown("<h4>Client Satisfaction Over Time</h4>", unsafe_allow_html=True)
-    client_satisfaction_data = filtered_df.groupby(['Sale Date', 'Salesman'])['Client Satisfaction'].mean().reset_index()
-    fig = px.line(client_satisfaction_data, x='Sale Date', y='Client Satisfaction', color='Salesman', line_group='Salesman', markers=True, title="Client Satisfaction Over Time")
-    fig.update_layout(xaxis_title='Date', yaxis_title='Client Satisfaction')
-    st.plotly_chart(fig, use_container_width=True)
+left_column, middle_column, right_column = st.columns(3)
+with left_column:
+    st.subheader("Total Sales:")
+    st.subheader(f"US $ {total_sales:,}")
+with middle_column:
+    st.subheader("Average Rating:")
+    st.subheader(f"{average_rating} {star_rating}")
+with right_column:
+    st.subheader("Average Sales Per Transaction:")
+    st.subheader(f"US $ {average_sale_by_transaction}")
 
-with col2:
-    st.markdown("<h4>Client Satisfaction Distribution</h4>", unsafe_allow_html=True)
-    fig, ax = plt.subplots()
-    sns.histplot(filtered_df['Client Satisfaction'], bins=20, kde=True, color='salmon', ax=ax)
-    st.pyplot(fig)
+st.markdown("""---""")
 
-with col3:
-    st.markdown("<h4>Positive vs Negative Feedback</h4>", unsafe_allow_html=True)
-    positive_negative_feedback = filtered_df[['Positive', 'Negative']].sum()
-    fig, ax = plt.subplots()
-    sns.barplot(x=positive_negative_feedback.index, y=positive_negative_feedback, palette=['green', 'red'])
-    st.pyplot(fig)
+# SALES BY PRODUCT LINE [BAR CHART]
+sales_by_product_line = df_selection.groupby(by=["Product line"])[["Total"]].sum().sort_values(by="Total")
+fig_product_sales = px.bar(
+    sales_by_product_line,
+    x="Total",
+    y=sales_by_product_line.index,
+    orientation="h",
+    title="<b>Sales by Product Line</b>",
+    color_discrete_sequence=["#0083B8"] * len(sales_by_product_line),
+    template="plotly_white",
+)
+fig_product_sales.update_layout(
+    plot_bgcolor="rgba(0,0,0,0)",
+    xaxis=(dict(showgrid=False))
+)
 
-# Total Calls by Salesman, Sales Distribution by Product, Revenue Distribution by Region
-st.markdown("<h1 style='text-align: center;'>Other Metrics</h1>", unsafe_allow_html=True)
-col1, col2, col3 = st.columns(3)
-with col1:
-    st.markdown("<h4>Total Calls by Salesman</h4>", unsafe_allow_html=True)
-    st.bar_chart(filtered_df.groupby('Salesman')['Calls'].sum().sort_values(ascending=False), color='#D3D3D3')
+# SALES BY HOUR [BAR CHART]
+sales_by_hour = df_selection.groupby(by=["hour"])[["Total"]].sum()
+fig_hourly_sales = px.bar(
+    sales_by_hour,
+    x=sales_by_hour.index,
+    y="Total",
+    title="<b>Sales by hour</b>",
+    color_discrete_sequence=["#0083B8"] * len(sales_by_hour),
+    template="plotly_white",
+)
+fig_hourly_sales.update_layout(
+    xaxis=dict(tickmode="linear"),
+    plot_bgcolor="rgba(0,0,0,0)",
+    yaxis=(dict(showgrid=False)),
+)
 
-with col2:
-    st.markdown("<h4>Sales Distribution by Product</h4>", unsafe_allow_html=True)
-    sales_distribution_data = filtered_df.groupby('Product')['Sales'].sum()
-    fig, ax = plt.subplots()
-    ax.pie(sales_distribution_data, labels=sales_distribution_data.index, autopct='%1.1f%%', startangle=90, colors=sns.color_palette("pastel"))
-    ax.axis('equal')  # Equal aspect ratio ensures the pie chart is circular.
-    st.pyplot(fig)
 
-with col3:
-    st.markdown("<h4>Revenue Distribution by Region</h4>", unsafe_allow_html=True)
-    revenue_distribution_data = filtered_df.groupby('Region')['Revenue'].sum()
-    fig, ax = plt.subplots()
-    ax.pie(revenue_distribution_data, labels=revenue_distribution_data.index, autopct='%1.1f%%', startangle=90, colors=sns.color_palette("pastel"))
-    ax.axis('equal')  # Equal aspect ratio ensures the pie chart is circular.
-    ax.add_artist(plt.Circle((0, 0), 0.6, fc='white'))  # Draw a white circle at the center to create a donut chart.
-    st.pyplot(fig)
+left_column, right_column = st.columns(2)
+left_column.plotly_chart(fig_hourly_sales, use_container_width=True)
+right_column.plotly_chart(fig_product_sales, use_container_width=True)
 
-# Raw Data Section
-if st.checkbox("Show Raw Data"):
-    st.markdown("<h1 style='text-align: center;'>Raw Data</h1>", unsafe_allow_html=True)
-    st.dataframe(filtered_df)
+
+# ---- HIDE STREAMLIT STYLE ----
+hide_st_style = """
+            <style>
+            #MainMenu {visibility: hidden;}
+            footer {visibility: hidden;}
+            header {visibility: hidden;}
+            </style>
+            """
+st.markdown(hide_st_style, unsafe_allow_html=True)
